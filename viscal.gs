@@ -41,11 +41,11 @@ const EVENT_ID_COLUMN = 4;
 const DELETED_EVENTS_SHEET_NAME = 'Deleted Events';
 
 function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  ui.createMenu('Google Calendar Sync')
-    .addItem('Refresh', 'refreshSheet')
-    .addItem('Synchronize', 'synchronizeSheet')
-    .addToUi();
+  // const ui = SpreadsheetApp.getUi();
+  // ui.createMenu('Google Calendar Sync')
+  //   .addItem('Refresh', 'refreshSheet')
+  //   .addItem('Synchronize', 'synchronizeSheet')
+  //   .addToUi();
 
   setActionColumnValidation();
 }
@@ -71,11 +71,7 @@ function getOrCreateSheet(sheetName) {
 }
 
 function refreshSheet() {
-  const ui = SpreadsheetApp.getUi();
-  const response = ui.alert('Warning', 'All data on the ' + GOOGLE_CALENDAR_SHEET_NAME + ' sheet will be wiped out. Do you want to continue?', ui.ButtonSet.YES_NO);
-
-  if (response === ui.Button.YES) {
-    const sheet = getOrCreateSheet(GOOGLE_CALENDAR_SHEET_NAME);
+  const sheet = getOrCreateSheet(GOOGLE_CALENDAR_SHEET_NAME);
     sheet.clear();
     initializeOptionsSheet();
 
@@ -126,7 +122,6 @@ function refreshSheet() {
     sheet.hideColumns(EVENT_ID_COLUMN);
     sheet.hideColumns(CALENDAR_ID_COLUMN);
     sheet.protect().setUnprotectedRanges([sheet.getRange(2, ACTION_COLUMN, sheet.getLastRow() - 1, 1), sheet.getRange(2, LAST_ACTION_COLUMN, sheet.getLastRow() - 1, 1)]);
-  }
 }
 
 
@@ -368,4 +363,85 @@ function setRowColorByAction(sheet, rowIndex, action) {
   }
 
   rowRange.setBackground(color);
+}
+
+function makeCopy() {
+  var formattedDate = Utilities.formatDate(new Date(), "CET", "yyyy-MM-dd' 'HH:mm");
+  var name = "Backup Copy " + formattedDate;
+  var destination = DriveApp.getFolderById("1UqmtBhXH8VDcGwer1cvLLcWoImiQAUtq");
+
+  // Added
+  var sheetId = "1qWrTE2gFKqY0LYeaWABlKhtDYBiwPnBA8MCFhhpWBhw";
+  var url = "https://docs.google.com/spreadsheets/d/" + sheetId + "/export?format=xlsx&access_token=" + ScriptApp.getOAuthToken();
+  var blob = UrlFetchApp.fetch(url).getBlob().setName(name + ".xlsx"); // Modified
+  destination.createFile(blob);
+}
+
+// Version with overwriting xls file
+
+// function exportSheetAsXLS() {
+//   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+//   const folder = DriveApp.getFileById(spreadsheet.getId()).getParents().next();
+//   const fileName = `${spreadsheet.getName()}.xlsx`;
+  
+//   // Check and delete the existing file with the same name
+//   const existingFiles = folder.getFilesByName(fileName);
+//   while (existingFiles.hasNext()) {
+//     const existingFile = existingFiles.next();
+//     existingFile.setTrashed(true);  // Move the file to trash instead of permanent deletion
+//   }
+  
+//   // Export and create the XLSX file
+//   const url = `https://docs.google.com/spreadsheets/d/${spreadsheet.getId()}/export?format=xlsx`;
+//   const options = {
+//     headers: {
+//       Authorization: `Bearer ${ScriptApp.getOAuthToken()}`
+//     },
+//     muteHttpExceptions: true
+//   };
+//   const response = UrlFetchApp.fetch(url, options);
+  
+//   if (response.getResponseCode() === 200) {
+//     const blob = response.getBlob().setName(fileName);
+//     folder.createFile(blob);
+//   } else {
+//     Logger.log('Error fetching the XLSX file');
+//   }
+// }
+
+function exportSheetAsXLS() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const file = DriveApp.getFileById(spreadsheet.getId());
+  const folder = DriveApp.getFolderById(file.getParents().next().getId());
+  const url = `https://docs.google.com/spreadsheets/d/${spreadsheet.getId()}/export?format=xlsx`;
+
+  const options = {
+    headers: {
+      Authorization: `Bearer ${ScriptApp.getOAuthToken()}`
+    },
+    muteHttpExceptions: true
+  };
+
+  const response = UrlFetchApp.fetch(url, options);
+  if (response.getResponseCode() === 200) {
+    const blob = response.getBlob();
+    folder.createFile(blob).setName(`${spreadsheet.getName()}.xlsx`);
+  } else {
+    Logger.log('Error fetching the XLSX file');
+  }
+}
+
+function doGet(e) {
+  const functionToRun = e.parameter.action;
+  if (functionToRun === 'refresh') {
+    refreshSheet();
+    exportSheetAsXLS();
+    return ContentService.createTextOutput('Refreshed the sheet.');
+  } else if (functionToRun === 'synchronize') {
+    synchronizeSheet();
+    exportSheetAsXLS();
+    return ContentService.createTextOutput('Synchronized the sheet.');
+  } else {
+    return ContentService.createTextOutput('No valid action provided.');
+  }
 }
